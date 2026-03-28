@@ -34,7 +34,10 @@ def parse_pdf(pdf_path: str | Path) -> tuple[Paper, list[Section]]:
     # Extract text page by page, detecting sections
     sections = _extract_sections(doc)
 
+    from papermind.models import make_paper_id
+
     paper = Paper(
+        id=make_paper_id(pdf_path),
         title=title,
         source_path=str(pdf_path),
         num_pages=len(doc),

@@ -111,3 +111,30 @@ class VectorStore:
     def count(self) -> int:
         """Return total number of chunks in the collection."""
         return self.collection.count()
+
+    def get_stored_papers(self) -> dict[str, dict]:
+        """Get all papers in the store with their chunk counts and sample metadata.
+
+        Returns:
+            {paper_id: {"chunk_count": N, "section_titles": [...]}}
+        """
+        total = self.count()
+        if total == 0:
+            return {}
+        result = self.collection.get(include=["metadatas"], limit=total)
+        papers: dict[str, dict] = {}
+        if result["metadatas"]:
+            for meta in result["metadatas"]:
+                pid = meta.get("paper_id", "")
+                if not pid:
+                    continue
+                if pid not in papers:
+                    papers[pid] = {"chunk_count": 0, "section_titles": set()}
+                papers[pid]["chunk_count"] += 1
+                title = meta.get("section_title", "")
+                if title:
+                    papers[pid]["section_titles"].add(title)
+        # Convert sets to sorted lists for JSON serialization
+        for info in papers.values():
+            info["section_titles"] = sorted(info["section_titles"])
+        return papers

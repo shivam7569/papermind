@@ -1,6 +1,8 @@
 """Shared data models for PaperMind."""
 
+import hashlib
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -12,6 +14,16 @@ def _utcnow() -> datetime:
 
 def _new_id() -> str:
     return uuid4().hex[:12]
+
+
+def make_paper_id(pdf_path: str | Path) -> str:
+    """Generate a deterministic paper ID from PDF file content.
+
+    Uses SHA-256 of the raw PDF bytes, so the same file always produces
+    the same ID regardless of filename, path, or which machine uploads it.
+    """
+    pdf_bytes = Path(pdf_path).read_bytes()
+    return hashlib.sha256(pdf_bytes).hexdigest()[:12]
 
 
 class Paper(BaseModel):

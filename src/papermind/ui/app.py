@@ -27,39 +27,41 @@ def main() -> None:
     _sidebar_stats()
 
     # --- Page routing ---
-    if page == "Chat":
-        from papermind.ui.pages.chat import render
-        render()
-    elif page == "Papers":
-        from papermind.ui.pages.papers import render
-        render()
-    elif page == "Search":
-        from papermind.ui.pages.search import render
-        render()
-    elif page == "Dataset":
-        from papermind.ui.pages.dataset import render
-        render()
-    elif page == "Benchmarks":
-        from papermind.ui.pages.benchmarks import render
-        render()
-    elif page == "System":
-        from papermind.ui.pages.system import render
-        render()
+    try:
+        if page == "Chat":
+            from papermind.ui.pages.chat import render
+            render()
+        elif page == "Papers":
+            from papermind.ui.pages.papers import render
+            render()
+        elif page == "Search":
+            from papermind.ui.pages.search import render
+            render()
+        elif page == "Dataset":
+            from papermind.ui.pages.dataset import render
+            render()
+        elif page == "Benchmarks":
+            from papermind.ui.pages.benchmarks import render
+            render()
+        elif page == "System":
+            from papermind.ui.pages.system import render
+            render()
+    except Exception as e:
+        st.error(f"Page error: {e}")
+        import traceback
+        st.code(traceback.format_exc())
 
 
 def _sidebar_stats() -> None:
-    """Show quick system stats in the sidebar."""
+    """Show quick system stats in the sidebar (non-blocking)."""
     try:
-        from papermind.ui.shared import get_vector_store, get_knowledge_graph
-        vs = get_vector_store()
-        kg = get_knowledge_graph()
-        chunk_count = vs.count if isinstance(vs.count, int) else vs.count()
-        st.sidebar.metric("Chunks", chunk_count)
+        from papermind.infrastructure.knowledge_graph import KnowledgeGraph
+        kg = KnowledgeGraph()
         col1, col2 = st.sidebar.columns(2)
         col1.metric("Entities", kg.count_entities())
         col2.metric("Relations", kg.count_relationships())
     except Exception:
-        st.sidebar.info("Services initializing...")
+        pass
 
 
 if __name__ == "__main__":

@@ -70,62 +70,80 @@ def _ingest_paper(uploaded, parser: str = "Hybrid (recommended)") -> None:
     import re
     from papermind.ingestion.chunker import chunk_sections
     from papermind.ingestion.entity_extractor import extract_entities
-
-    progress = st.progress(0, text="Saving file...")
+    from papermind.models import make_paper_id
 
     # Save to temp file
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
         f.write(uploaded.getvalue())
         tmp_path = Path(f.name)
 
+    # Generate deterministic paper ID from content
+    content_paper_id = make_paper_id(tmp_path)
+
     try:
-        # Parse — select parser
-        if "Hybrid" in parser:
-            from papermind.ingestion.hybrid_parser import parse_pdf_hybrid
-            progress.progress(10, text="Parsing via GROBID + MinerU (hybrid)...")
-            paper, sections = parse_pdf_hybrid(tmp_path)
-        elif "GROBID" in parser:
-            from papermind.ingestion.grobid_parser import parse_pdf
-            progress.progress(10, text="Parsing via GROBID...")
-            paper, sections = parse_pdf(tmp_path)
-        else:
-            from papermind.ingestion.pdf_parser import parse_pdf
-            progress.progress(10, text="Parsing via PyMuPDF...")
-            paper, sections = parse_pdf(tmp_path)
+        with st.status("Ingesting paper...", expanded=True) as status:
+            # Parse — select parser
+            if "Hybrid" in parser:
+                from papermind.ingestion.hybrid_parser import parse_pdf_hybrid
+                status.write("Parsing via GROBID + MinerU hybrid (~30s)...")
+                paper, sections = parse_pdf_hybrid(tmp_path)
+                status.write(f"Parsed: {paper.title}")
+            elif "GROBID" in parser:
+                from papermind.ingestion.grobid_parser import parse_pdf
+                status.write("Parsing via GROBID...")
+                paper, sections = parse_pdf(tmp_path)
+                status.write(f"Parsed: {paper.title}")
+            else:
+                from papermind.ingestion.pdf_parser import parse_pdf
+                status.write("Parsing via PyMuPDF...")
+                paper, sections = parse_pdf(tmp_path)
+                status.write(f"Parsed: {paper.title}")
 
-        # Count equations
-        all_text = "\n".join(s.text for s in sections)
-        display_eqs = len(re.findall(r'^\$\$', all_text, re.MULTILINE)) // 2
-        inline_eqs = len(re.findall(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)', all_text))
-        has_latex = bool(re.search(r'\\frac|\\sum|\\int|\\mathrm|\\mathbf', all_text))
+            # Override with deterministic ID from content hash
+            paper.id = content_paper_id
 
-        # Chunk
-        progress.progress(40, text="Chunking text...")
-        chunks = chunk_sections(sections, paper.id)
+            # Clean old data if re-ingesting the same paper
+            from papermind.ui.shared import get_embedding_pipeline, get_knowledge_graph, get_paper_store
+            pipeline = get_embedding_pipeline()
+            kg = get_knowledge_graph()
+            paper_store = get_paper_store()
 
-        # Embed
-        progress.progress(55, text="Embedding chunks...")
-        from papermind.ui.shared import get_embedding_pipeline, get_knowledge_graph
-        pipeline = get_embedding_pipeline()
-        num_stored = pipeline.embed_and_store(chunks)
-        paper.num_chunks = num_stored
+            existing = paper_store.get(paper.id)
+            if existing:
+                status.write("Re-ingesting — clearing old data...")
+                pipeline.vector_store.delete_by_paper(paper.id)
+                kg.delete_by_paper(paper.id)
 
-        # Extract entities
-        progress.progress(80, text="Extracting entities...")
-        entities, relationships = extract_entities(sections, paper.id)
-        kg = get_knowledge_graph()
-        for entity in entities:
-            kg.add_entity(entity)
-        for rel in relationships:
-            kg.add_relationship(rel)
-        paper.num_entities = len(entities)
+            # Count equations
+            all_text = "\n".join(s.text for s in sections)
+            display_eqs = len(re.findall(r'^\$\$', all_text, re.MULTILINE)) // 2
+            inline_eqs = len(re.findall(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)', all_text))
+            has_latex = bool(re.search(r'\\frac|\\sum|\\int|\\mathrm|\\mathbf', all_text))
 
-        # Store paper metadata
-        if "papers" not in st.session_state:
-            st.session_state.papers = {}
-        st.session_state.papers[paper.id] = paper
+            # Chunk
+            status.write(f"Chunking {len(sections)} sections...")
+            chunks = chunk_sections(sections, paper.id)
+            status.write(f"Created {len(chunks)} chunks")
 
-        progress.progress(100, text="Done!")
+            # Embed
+            status.write("Embedding chunks (loading model on first use)...")
+            num_stored = pipeline.embed_and_store(chunks)
+            paper.num_chunks = num_stored
+            status.write(f"Stored {num_stored} chunks")
+
+            # Extract entities
+            status.write("Extracting entities...")
+            entities, relationships = extract_entities(sections, paper.id)
+            for entity in entities:
+                kg.add_entity(entity)
+            for rel in relationships:
+                kg.add_relationship(rel)
+            paper.num_entities = len(entities)
+
+            # Persist paper metadata to SQLite (survives restarts)
+            paper_store.save(paper)
+
+            status.update(label="Ingestion complete!", state="complete", expanded=False)
 
         # Show results
         st.success(f"Ingested **{paper.title}**")
@@ -174,19 +192,26 @@ def _ingest_paper(uploaded, parser: str = "Hybrid (recommended)") -> None:
 
 
 def _browse_tab() -> None:
-    """Browse ingested papers."""
-    papers = st.session_state.get("papers", {})
+    """Browse ingested papers from persistent store."""
+    from papermind.ui.shared import get_paper_store
+
+    paper_store = get_paper_store()
+    papers = paper_store.list_all()
 
     if not papers:
         st.info("No papers ingested yet. Upload a PDF in the Upload tab.")
         return
 
-    for pid, paper in papers.items():
+    st.write(f"**{len(papers)} papers** ingested")
+
+    for paper in papers:
         with st.container(border=True):
             st.subheader(paper.title or "Untitled")
             col1, col2, col3 = st.columns(3)
-            col1.write(f"**ID:** `{pid}`")
-            col2.write(f"**Pages:** {paper.num_pages}")
-            col3.write(f"**Chunks:** {paper.num_chunks} | **Entities:** {paper.num_entities}")
+            col1.write(f"**ID:** `{paper.id}`")
+            col2.write(f"**Chunks:** {paper.num_chunks}")
+            col3.write(f"**Entities:** {paper.num_entities}")
+            if paper.authors:
+                st.caption(", ".join(paper.authors[:5]))
 
 

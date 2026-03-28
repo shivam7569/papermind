@@ -37,7 +37,7 @@ class EmbeddingSettings(BaseModel):
 
 
 class VectorStoreSettings(BaseModel):
-    backend: str = "faiss"  # "faiss" or "chroma"
+    backend: str = "chroma"
     # ChromaDB settings
     persist_directory: str = "./data/chroma"
     collection_name: str = "paper_chunks"

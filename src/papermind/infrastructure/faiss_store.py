@@ -141,7 +141,6 @@ class FaissVectorStore:
         assert self._index is not None
         return self._index
 
-    @property
     def count(self) -> int:
         return self.index.ntotal
 
@@ -196,7 +195,7 @@ class FaissVectorStore:
                 )
             )
 
-        logger.info("Added %d vectors (total: %d)", len(chunks), self.count)
+        logger.info("Added %d vectors (total: %d)", len(chunks), self.count())
 
     def search(
         self,
@@ -211,7 +210,7 @@ class FaissVectorStore:
             n_results: Number of results to return.
             paper_id: Optional filter — only return chunks from this paper.
         """
-        if self.count == 0:
+        if self.count() == 0:
             return []
 
         query = query_embedding.reshape(1, -1)
@@ -225,7 +224,7 @@ class FaissVectorStore:
                 self.index, "nprobe", self.config.ivf_nprobe
             )
 
-        scores, indices = self.index.search(query, min(fetch_k, self.count))
+        scores, indices = self.index.search(query, min(fetch_k, self.count()))
 
         results: list[SearchResult] = []
         for score, idx in zip(scores[0], indices[0]):
@@ -295,7 +294,7 @@ class FaissVectorStore:
         stats: dict[str, Any] = {
             "index_type": self.config.index_type.value,
             "dimension": self.dimension,
-            "total_vectors": self.count,
+            "total_vectors": self.count(),
             "is_trained": self.is_trained,
         }
         if self.config.index_type == IndexType.IVF:
@@ -338,7 +337,7 @@ class FaissVectorStore:
         ]
         self._meta_path.write_text(json.dumps(meta_dicts, ensure_ascii=False))
         logger.info(
-            "Saved FAISS index (%d vectors) to %s", self.count, self._persist_dir
+            "Saved FAISS index (%d vectors) to %s", self.count(), self._persist_dir
         )
 
     def _load(self) -> None:
@@ -348,7 +347,7 @@ class FaissVectorStore:
         self._metadata = [_ChunkMeta(**d) for d in meta_dicts]
         logger.info(
             "Loaded FAISS index (%d vectors, type=%s) from %s",
-            self.count,
+            self.count(),
             self.config.index_type.value,
             self._persist_dir,
         )

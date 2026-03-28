@@ -128,7 +128,10 @@ def _extract_paper(soup: BeautifulSoup, pdf_path: Path) -> Paper:
         else:
             abstract = abstract_tag.get_text(strip=True)
 
+    from papermind.models import make_paper_id
+
     return Paper(
+        id=make_paper_id(pdf_path),
         title=title,
         authors=authors,
         abstract=abstract,

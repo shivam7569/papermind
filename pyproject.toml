@@ -22,6 +22,8 @@ dependencies = [
     "datasketch>=1.9.0",
     "grobid-client-python>=0.1.4",
     "mineru>=2.7.6",
+    "accelerate>=1.13.0",
+    "bitsandbytes>=0.46.1",
 ]
 
 [project.optional-dependencies]

@@ -1,36 +1,27 @@
-"""Shared cached resources for all Streamlit pages.
+"""Shared resources for Streamlit pages.
 
-All pages must import from here instead of creating their own cached instances.
-This ensures the sidebar, Papers, Search, and KG tabs all see the same data.
+Thin wrappers around the centralized service registry.
+No caching here — the registry handles singleton lifecycle.
 """
 
-import streamlit as st
+from papermind.services import services
 
 
-@st.cache_resource(show_spinner="Loading vector store...")
 def get_vector_store():
-    from papermind.api.dependencies import _create_vector_store
-    return _create_vector_store()
+    return services.vector_store
 
 
-@st.cache_resource(show_spinner="Loading knowledge graph...")
 def get_knowledge_graph():
-    from papermind.infrastructure.knowledge_graph import KnowledgeGraph
-    return KnowledgeGraph()
+    return services.knowledge_graph
 
 
-@st.cache_resource(show_spinner="Loading embedding model...")
 def get_embedding_service():
-    from papermind.infrastructure.embedding import EmbeddingService
-    from papermind.config import get_settings
-    settings = get_settings()
-    return EmbeddingService(matryoshka_dim=settings.embedding.matryoshka_dim)
+    return services.embedding_service
 
 
-@st.cache_resource(show_spinner="Loading embedding pipeline...")
 def get_embedding_pipeline():
-    from papermind.ingestion.embedder import EmbeddingPipeline
-    return EmbeddingPipeline(
-        embedding_service=get_embedding_service(),
-        vector_store=get_vector_store(),
-    )
+    return services.embedding_pipeline
+
+
+def get_paper_store():
+    return services.paper_store

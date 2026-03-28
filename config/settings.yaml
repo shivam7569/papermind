@@ -21,7 +21,7 @@ embedding:
   # matryoshka_dim: 256  # uncomment to use truncated 256d embeddings
 
 vector_store:
-  backend: "faiss"           # "faiss" or "chroma"
+  backend: "chroma"
   persist_directory: "./data/chroma"
   collection_name: "paper_chunks"
   faiss_directory: "./data/faiss"
