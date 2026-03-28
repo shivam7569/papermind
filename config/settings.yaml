@@ -1,0 +1,55 @@
+llm:
+  # Backend: "local" (transformers+bitsandbytes) or "ollama"
+  backend: "local"
+  local_model: "Qwen/Qwen2.5-Coder-7B-Instruct"
+  quantization: "nf4"       # "nf4" (~3.5GB), "int8" (~7.5GB), or "none" (~14GB)
+  double_quant: true         # Quantize scale factors too, saves ~200MB
+  compute_dtype: "bfloat16"  # Dequantized matmul dtype (bfloat16 or float16)
+  max_new_tokens: 2048
+  temperature: 0.1
+  top_p: 0.95
+  repetition_penalty: 1.05
+  # Ollama fallback settings
+  base_url: "http://localhost:11434"
+  model: "qwen2.5-coder:7b-instruct-q5_K_M"
+  timeout: 120
+
+embedding:
+  model_name: "nomic-ai/nomic-embed-text-v1.5"
+  device: "cpu"
+  batch_size: 64
+  # matryoshka_dim: 256  # uncomment to use truncated 256d embeddings
+
+vector_store:
+  backend: "faiss"           # "faiss" or "chroma"
+  persist_directory: "./data/chroma"
+  collection_name: "paper_chunks"
+  faiss_directory: "./data/faiss"
+  faiss_index_type: "hnsw"   # "flat", "ivf", or "hnsw"
+  # IVF tuning
+  faiss_ivf_nlist: 100
+  faiss_ivf_nprobe: 10
+  # HNSW tuning
+  faiss_hnsw_m: 32
+  faiss_hnsw_ef_construction: 200
+  faiss_hnsw_ef_search: 64
+
+knowledge_graph:
+  db_path: "./data/kg.sqlite"
+
+chunking:
+  chunk_size: 512
+  chunk_overlap: 64
+  min_chunk_size: 50
+
+grobid:
+  url: "http://localhost:8070"
+  timeout: 120
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+
+ingestion:
+  papers_directory: "./data/papers"
+  pdf_parser: "grobid"   # "grobid" or "pymupdf" (fallback)

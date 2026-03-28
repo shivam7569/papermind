@@ -1,0 +1,25 @@
+# Custom GROBID image with a JDK that supports cgroups v2 on newer kernels.
+#
+# The official lfoppiano/grobid:0.8.1 image bundles a JDK 21 build that crashes
+# with "Cannot invoke CgroupInfo.getMountPoint()" on kernels 6.x with unified
+# cgroups v2. We fix this by swapping in Eclipse Temurin JRE 21.0.6 which has
+# the cgroup v2 fix (https://bugs.openjdk.org/browse/JDK-8322420).
+#
+# Build:  docker build -t papermind/grobid -f docker/Dockerfile.grobid docker/
+# Run:    docker run -d --name grobid -p 8070:8070 papermind/grobid
+
+FROM lfoppiano/grobid:0.8.1 AS grobid-src
+
+FROM eclipse-temurin:21-jre-noble
+
+RUN apt-get update -qq && apt-get install -y -qq tini && rm -rf /var/lib/apt/lists/*
+
+# Copy GROBID installation from official image
+COPY --from=grobid-src /opt/grobid /opt/grobid
+
+WORKDIR /opt/grobid
+
+EXPOSE 8070
+
+ENTRYPOINT ["tini", "-s", "--"]
+CMD ["./grobid-service/bin/grobid-service"]
