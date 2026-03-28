@@ -40,6 +40,11 @@ class RAGConfig:
     temperature: float = 0.1       # LLM temperature
     max_tokens: int = 2048         # max generation tokens
 
+    # Reasoning framework
+    reasoning: str = "direct"      # "direct", "cot", "self_consistency", "react"
+    cot_mode: str = "structured"   # "zero_shot", "structured", "decompose"
+    sc_samples: int = 5            # self-consistency: number of samples
+
 
 @dataclass
 class RAGResult:
@@ -53,6 +58,9 @@ class RAGResult:
     reranked_count: int = 0
     context_count: int = 0
     context_tokens: int = 0
+    reasoning_mode: str = "direct"
+    reasoning_trace: str = ""      # full CoT reasoning or ReAct trajectory
+    confidence: float = 1.0        # self-consistency confidence (1.0 for others)
 
 
 DEFAULT_SYSTEM_PROMPT = """\
@@ -130,21 +138,26 @@ class RAGPipeline:
         result.context_count = len(context_results)
         result.context_tokens = count_tokens(context_str)
 
-        # Stage 4: LLM generation
+        # Stage 4: LLM generation with reasoning framework
+        result.reasoning_mode = cfg.reasoning
         logger.info(
-            "RAG Stage 4: Generating (context=%d tokens, %d sources)",
-            result.context_tokens, result.context_count,
+            "RAG Stage 4: Generating (mode=%s, context=%d tokens, %d sources)",
+            cfg.reasoning, result.context_tokens, result.context_count,
         )
-        system = cfg.system_prompt or DEFAULT_SYSTEM_PROMPT
-        prompt = self._build_prompt(question, context_str)
 
-        from papermind.infrastructure.llm_client import LLMClient
-
-        client = LLMClient()
         try:
-            result.answer = await client.generate(prompt, system=system)
+            if cfg.reasoning == "react":
+                # ReAct bypasses normal retrieval — it does its own search
+                await self._generate_react(question, result, cfg)
+            elif cfg.reasoning == "self_consistency":
+                await self._generate_self_consistency(question, context_str, result, cfg)
+            elif cfg.reasoning == "cot":
+                await self._generate_cot(question, context_str, result, cfg)
+            else:
+                # Direct generation (default)
+                await self._generate_direct(question, context_str, result, cfg)
         except Exception as e:
-            logger.error("LLM generation failed: %s", e)
+            logger.error("Generation failed: %s", e)
             result.answer = (
                 f"I found {result.context_count} relevant sources but couldn't generate "
                 f"an answer (LLM error: {e}). Here are the top sources:\n\n"
@@ -158,6 +171,72 @@ class RAGPipeline:
                      result.retrieval_count, result.reranked_count, result.context_count)
 
         return result
+
+    async def _generate_direct(
+        self, question: str, context: str, result: RAGResult, cfg: RAGConfig,
+    ) -> None:
+        """Standard direct generation."""
+        from papermind.infrastructure.llm_client import LLMClient
+
+        system = cfg.system_prompt or DEFAULT_SYSTEM_PROMPT
+        prompt = self._build_prompt(question, context)
+        client = LLMClient()
+        result.answer = await client.generate(prompt, system=system)
+
+    async def _generate_cot(
+        self, question: str, context: str, result: RAGResult, cfg: RAGConfig,
+    ) -> None:
+        """Chain-of-Thought generation."""
+        from papermind.reasoning.cot import build_cot_prompt, get_system_prompt, extract_final_answer
+        from papermind.infrastructure.llm_client import LLMClient
+
+        system = cfg.system_prompt or get_system_prompt(cfg.cot_mode)
+        prompt = build_cot_prompt(question, context, mode=cfg.cot_mode)
+        client = LLMClient()
+        raw_response = await client.generate(prompt, system=system)
+        result.reasoning_trace = raw_response
+        result.answer = extract_final_answer(raw_response)
+
+    async def _generate_self_consistency(
+        self, question: str, context: str, result: RAGResult, cfg: RAGConfig,
+    ) -> None:
+        """Self-Consistency generation with majority voting."""
+        from papermind.reasoning.self_consistency import self_consistent_answer
+
+        sc_result = await self_consistent_answer(
+            question=question,
+            context=context,
+            n_samples=cfg.sc_samples,
+            temperature=0.7,
+            system=cfg.system_prompt,
+        )
+        result.answer = sc_result.answer
+        result.confidence = sc_result.confidence
+        result.reasoning_trace = (
+            f"Self-Consistency: {sc_result.n_samples} samples, "
+            f"{sc_result.n_unique} unique answers, "
+            f"{sc_result.confidence:.0%} confidence\n\n"
+            f"Vote distribution:\n"
+            + "\n".join(
+                f"  {count}x: {ans[:100]}"
+                for ans, count in sc_result.vote_distribution.items()
+            )
+        )
+
+    async def _generate_react(
+        self, question: str, result: RAGResult, cfg: RAGConfig,
+    ) -> None:
+        """ReAct reasoning loop — model uses tools to gather information."""
+        from papermind.reasoning.react import react_answer
+
+        react_result = await react_answer(
+            question=question,
+            max_iterations=5,
+            system=cfg.system_prompt,
+        )
+        result.answer = react_result.answer
+        result.reasoning_trace = react_result.trajectory
+        result.reasoning_mode = "react"
 
     async def query_stream(self, question: str, config: RAGConfig | None = None):
         """Stream the RAG pipeline — yields (event_type, data) tuples.
