@@ -6,12 +6,15 @@ build/
 .eggs/
 *.egg
 .venv/
+.venv-mineru/
 .env
 data/chroma/
 data/faiss/
 data/pwc/
 data/papers/*.pdf
-data/benchmark_results.json
+data/papers.db
+data/kg.sqlite
+*.npy
 *.sqlite
 .mypy_cache/
 .pytest_cache/
@@ -20,3 +23,5 @@ data/benchmark_results.json
 htmlcov/
 lib/
 .history
+frontend/node_modules/
+frontend/dist/

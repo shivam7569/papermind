@@ -1,11 +1,9 @@
 """Search endpoints for vector and knowledge graph queries."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from papermind.api.dependencies import get_embedding_pipeline, get_knowledge_graph
-from papermind.ingestion.embedder import EmbeddingPipeline
-from papermind.infrastructure.knowledge_graph import KnowledgeGraph
+from papermind.services import services
 
 router = APIRouter(tags=["search"])
 
@@ -17,37 +15,31 @@ class SearchRequest(BaseModel):
 
 
 @router.post("/search")
-async def vector_search(
-    req: SearchRequest,
-    pipeline: EmbeddingPipeline = Depends(get_embedding_pipeline),
-) -> list[dict]:
+async def vector_search(req: SearchRequest) -> dict:
     """Search paper chunks by semantic similarity."""
+    pipeline = services.embedding_pipeline
     results = pipeline.search(req.query, req.n_results, req.paper_id)
-    return [r.model_dump() for r in results]
+    return {"results": [r.model_dump() for r in results]}
 
 
 @router.get("/kg/entities")
 async def search_entities(
-    q: str = Query("", description="Search query for entity name"),
-    entity_type: str = Query("", description="Filter by entity type"),
-    paper_id: str = Query("", description="Filter by paper ID"),
+    query: str = Query("", alias="query"),
+    entity_type: str = Query(""),
     limit: int = Query(50, le=200),
-    kg: KnowledgeGraph = Depends(get_knowledge_graph),
 ) -> list[dict]:
     """Search entities in the knowledge graph."""
-    entities = kg.search_entities(q, entity_type, paper_id, limit)
+    kg = services.knowledge_graph
+    entities = kg.search_entities(query, entity_type, limit=limit)
     return [e.model_dump() for e in entities]
 
 
 @router.get("/kg/entity/{entity_id}/neighbors")
-async def get_entity_neighbors(
-    entity_id: str,
-    relation_type: str = Query("", description="Filter by relation type"),
-    kg: KnowledgeGraph = Depends(get_knowledge_graph),
-) -> list[dict]:
+async def get_entity_neighbors(entity_id: str) -> list[dict]:
     """Get entities connected to the given entity."""
-    neighbors = kg.get_neighbors(entity_id, relation_type)
+    kg = services.knowledge_graph
+    neighbors = kg.get_neighbors(entity_id)
     return [
-        {"relationship": rel.model_dump(), "entity": entity.model_dump()}
+        {"relation": rel.model_dump(), "entity": entity.model_dump()}
         for rel, entity in neighbors
     ]
