@@ -1,244 +1,285 @@
-# PaperMind — Complete Project Context
+## PERSISTENT CONTEXT MAINTENANCE — STANDING INSTRUCTION
 
-> This file is the single source of truth for the entire project.
-> It is loaded into every Claude Code conversation. When context compacts,
-> this file ensures no knowledge is lost.
+This is a standing instruction that applies for the entire duration of this project.
+You must follow it without being reminded. Do not wait for me to ask.
 
-## What This Project Is
+---
 
-PaperMind is a **local AI research system** that runs entirely on a single NVIDIA RTX 5070 Ti (12GB VRAM). It ingests research papers (PDF), extracts structured content including LaTeX equations, builds a knowledge graph, embeds everything into a vector store, and provides RAG-grounded chat powered by a locally-running Qwen2.5-Coder-7B model.
+### OVERVIEW
 
-No cloud APIs. No data leaves the machine.
+You are working on **Papermind** — an AI research paper intelligence system built
+as a modular, interconnected set of sub-projects, each covering a distinct set of
+LLM ecosystem topics (RAG, GraphRAG, Agentic systems, Fine-tuning/PEFT, RLHF,
+Evaluation, Inference Optimization). The sub-projects are architecturally
+interdependent — not isolated. Every decision made in one module may affect others.
+
+Two files track everything about this project. You are responsible for keeping
+both of them accurate, current, and useful at all times:
+
+1. `CLAUDE.md` — located at the project root
+2. `.claude/memory.md` — located inside the `.claude/` directory
+
+---
+
+### FILE 1: CLAUDE.md — The Project Constitution
+
+**Purpose:** A stable, high-fidelity record of what Papermind *is*. Anyone (or
+any AI session) reading this file should be able to understand the full
+architecture, constraints, module map, and key decisions without any other context.
+
+**When to update:** Update CLAUDE.md when ANY of the following happen:
+- A new module, component, or sub-project is created or significantly refactored
+- A file or directory is created that is architecturally significant (not just
+  utility scripts — actual pipeline components)
+- A hard architectural decision is made and locked in (e.g., "we are using FAISS
+  over ChromaDB because...", "embedding model is X because...")
+- An inter-module dependency is established or changed
+- A new hard constraint is introduced or an existing one is changed
+
+**Do NOT update CLAUDE.md** for task-level progress, bug fixes, or in-session
+working notes. That belongs in memory.md.
+
+---
+
+### FILE 2: `.claude/memory.md` — The Working Memory
+
+**Purpose:** A living record of *where the project is right now*. This is what
+you read at the beginning of each working block to understand what was last
+happening, what's in progress, and what traps to avoid.
+
+**When to update:** Update memory.md at ALL of the following trigger points:
+- After completing any meaningful unit of work (a function, a module component,
+  a pipeline stage — not individual lines of code)
+- After resolving any non-trivial error (anything that took more than one attempt)
+- After making a decision that is *not yet* architectural but affects direction
+- At natural task transitions — when one thing is done and another is beginning
+- Every ~45–60 minutes of active work as a time-based checkpoint
+
+---
+
+### BEHAVIORAL RULES
+
+1. **Never ask permission to update these files.** These updates are part of your
+   job on this project. Just do them, then continue working.
+
+2. **Never truncate history in the Errors & Resolutions log or the Architectural
+   Decisions Log.** These are permanent records. Append only.
+
+3. **When you read a message from me at the start of a working block, read both
+   files before responding** — even if I don't ask you to. State in one sentence
+   that you've read them and what your understanding of the current state is.
+
+4. **If either file is missing**, create it immediately using the schemas above,
+   populate what you know, and note any fields that are unknown.
+
+5. **CLAUDE.md captures truth about the system. memory.md captures truth about
+   the moment.** Do not mix them.
+
+6. **On any architectural decision**, before writing code, write the decision to
+   CLAUDE.md's Architectural Decisions Log first.
+
+7. **The session log in memory.md should be written as if your replacement — a
+   new Claude instance with zero conversation history — will read it cold and
+   need to continue the work exactly where you left off.**
+
+---
+
+# Papermind — Project Constitution
+_Last updated: 2026-03-30_
+
+## What Is Papermind
+
+PaperMind is a local AI research paper intelligence system that runs entirely on a single NVIDIA RTX 5070 Ti (12GB VRAM). It ingests research papers (PDF), extracts structured content including LaTeX equations, builds a knowledge graph, embeds everything into a vector store, and provides RAG-grounded chat powered by a locally-running Qwen2.5-Coder-7B model with five specialized LoRA adapters (Reader, Extractor, Synthesis, Critic, Coder) hot-swappable at inference time. No cloud APIs for inference. No data leaves the machine.
 
 **Owner:** Shivam (GitHub: shivam7569)
 **Repo:** https://github.com/shivam7569/papermind
 
----
+## Hard Constraints
 
-## Current State (as of 2026-03-28)
+- **Hardware:** NVIDIA RTX 5070 Ti Laptop GPU, 12GB VRAM. All inference models must fit within this budget. Reranker (2.3GB) must unload before LLM (5.2GB) loads.
+- **Local-first:** No cloud APIs for inference or user data processing. Cloud is only for training (RunPod A100 bursts) and data generation (Groq API for training data).
+- **Domain scope:** AI/ML/DL research papers only. All training data must be strictly within this domain — no biomedical, no generic NLI, no off-domain content.
+- **Base model:** Qwen/Qwen2.5-Coder-7B-Instruct, NF4 quantized via bitsandbytes. 5.18GB VRAM, 48.9 tok/s streaming.
+- **Embedding:** nomic-ai/nomic-embed-text-v1.5 (768d) on CPU. Do NOT truncate to lower dimensions (recall drops to 54%).
+- **Vector store:** ChromaDB (not FAISS). FAISS is available as alternative but ChromaDB is default for persistence + metadata filtering.
+- **PDF parsing:** Hybrid GROBID (metadata) + MinerU (LaTeX equations). MinerU runs in isolated `.venv-mineru/` (needs transformers 4.x, main uses 5.x).
+- **Training data quality:** Always validate 20% sample with Claude Opus audit before scaling to full dataset. Never generate full dataset without intermediate validation.
+- **No shortcuts:** Always verify script versions match approved versions before launching. Always update generation scripts immediately after prompt approval.
 
-### What's Built and Working
-- Hybrid PDF parsing (GROBID metadata + MinerU LaTeX equations)
-- Parent-child chunking with section-aware splitting
-- ChromaDB vector store with nomic-embed-text-v1.5 (768d)
-- SQLite knowledge graph (entities + relationships)
-- Full RAG pipeline: retrieve → rerank (BGE-v2-m3) → lost-in-middle → compress → generate
-- Local LLM: Qwen2.5-Coder-7B NF4 quantized (5.2GB VRAM, 48.9 tok/s)
-- Streamlit UI (Chat, Papers, Search, KG, Benchmarks, System)
-- FastAPI backend with all endpoints
-- Centralized ServiceRegistry (thread-safe singletons)
-- Deterministic paper IDs (SHA-256 of PDF content)
-- Persistent paper metadata (SQLite paper_store)
-- 170 exhaustive tests, all passing
-- PwC dataset builder (GitHub API, rate-limit aware)
-- Comprehensive benchmarks (FAISS Flat/IVF/HNSW + ChromaDB + Matryoshka)
+## System Architecture
 
-### What's NOT Built Yet
-- QLoRA fine-tuning on PwC dataset
-- LLM-based entity extraction (currently regex heuristics)
-- Multi-agent orchestration (code gen + sandbox execution)
-- Code sandbox (Docker + Jupyter kernels)
-- Production-quality frontend (attempted React, reverted to Streamlit)
-- Graph visualization in the UI (PyVis exists but basic)
-- Embedding caching
-- WebSocket streaming for LLM tokens
-- MCP (Model Context Protocol) server integration
+Papers enter the system through the **Hybrid Parser** (GROBID for metadata + MinerU for body text with LaTeX equations), producing structured Paper and Section objects. The **Chunker** splits sections into parent-child chunks (parent = full section capped at 2048 tokens, children = 512-token chunks with 64-token overlap). The **EmbeddingPipeline** embeds chunks via nomic-embed-text-v1.5 and stores them in **ChromaDB**. Simultaneously, the **Entity Extractor** (currently regex heuristics, planned: LLM-based via Extractor adapter) extracts entities and relationships into a **SQLite Knowledge Graph**.
 
----
+At query time, the **Hybrid Retriever** performs vector search (2x n_results) and KG entity expansion, fusing results via Reciprocal Rank Fusion (k=60). The **Reranker** (BAAI/bge-reranker-v2-m3, 568M params, FP32) re-scores the candidates. The reranker then **unloads from GPU** before the **LLM** (Qwen2.5-Coder-7B NF4) loads. **Context Assembly** deduplicates (Jaccard >0.7), compresses (token budget), and applies lost-in-middle ordering. The LLM generates a grounded answer with source citations.
 
-## Architecture At A Glance
+Four **Reasoning Frameworks** wrap the generation: Direct, Chain-of-Thought, Self-Consistency (N=5 majority vote), and ReAct (Thought→Action→Observation with tools: search, lookup_entity, read_section).
+
+Five **LoRA adapters** (all sharing lora_r=16, alpha=32, dropout=0.05, DoRA=true, targeting all linear layers, ~20-34MB each) will specialize the base model: Reader (summarize/QA), Extractor (entity-relation extraction for KG), Synthesis (multi-paper comparison), Critic (claim verification), Coder (paper-to-code). Hot-swappable via PEFT `set_adapter()` in <1ms.
+
+All shared state flows through the **ServiceRegistry** singleton (RLock-based, prevents deadlocks in nested property access). The **Streamlit UI** provides Chat, Papers, Search, Training, Dataset, Benchmarks, and System pages. A **FastAPI backend** exposes health, papers, search, and chat endpoints.
+
+## Module Map
+
+### Ingestion (`src/papermind/ingestion/`)
+- **Purpose:** Parse PDFs, chunk text, embed, extract entities, store everything
+- **Covers:** Document parsing, LaTeX extraction, chunking strategies, embedding pipelines
+- **Entry point:** `hybrid_parser.py` (primary), `chunker.py`, `embedder.py`
+- **Key dependencies:** GROBID Docker container, MinerU .venv-mineru/, nomic-embed model
+- **Produces:** Chunks in ChromaDB, entities in SQLite KG, paper metadata in SQLite paper_store
+- **Status:** Complete
+
+### RAG (`src/papermind/rag/`)
+- **Purpose:** Retrieve, rerank, assemble context, generate grounded answers
+- **Covers:** Hybrid retrieval (vector + KG), cross-encoder reranking, lost-in-middle ordering, context compression
+- **Entry point:** `pipeline.py` (orchestrator), `retriever.py`, `reranker.py`, `context.py`
+- **Key dependencies:** ChromaDB, KnowledgeGraph, EmbeddingService, LLMClient
+- **Produces:** Grounded answers with source citations
+- **Status:** Complete
+
+### Infrastructure (`src/papermind/infrastructure/`)
+- **Purpose:** Core services — embedding, vector store, KG, LLM, paper store
+- **Covers:** Model loading, quantization, VRAM management, persistence
+- **Entry point:** `local_model.py` (Qwen NF4), `embedding.py`, `vector_store.py`, `knowledge_graph.py`
+- **Key dependencies:** transformers, bitsandbytes, sentence-transformers, ChromaDB, SQLite
+- **Produces:** Singleton services consumed by all other modules
+- **Status:** Complete
+
+### Reasoning (`src/papermind/reasoning/`)
+- **Purpose:** Wrap LLM generation with structured reasoning strategies
+- **Covers:** CoT prompting, Self-Consistency (majority vote), ReAct (tool-use loop)
+- **Entry point:** `frameworks.py`
+- **Key dependencies:** RAG pipeline, LLMClient
+- **Produces:** ReasoningResult(answer, reasoning_trace, sources, metadata)
+- **Status:** Complete
+
+### Training (`src/papermind/training/`)
+- **Purpose:** QLoRA/DoRA fine-tuning pipeline for all 5 adapters
+- **Covers:** PEFT/LoRA, bitsandbytes quantization, SFT training, DPO/ORPO alignment
+- **Entry point:** `trainer.py` (CLI), `config.py` (hyperparameters), `data.py` (data loading)
+- **Key dependencies:** transformers, peft, trl, bitsandbytes
+- **Produces:** LoRA adapter weights (~20-34MB each) in `data/adapters/`
+- **Status:** Pipeline complete, training data in progress (Phase 5 of 10)
+
+### Data Generation (`scripts/generate_*.py`)
+- **Purpose:** Generate training data for adapters using Groq API + gold datasets
+- **Covers:** S2ORC paper fetching, Groq-based gold labeling, prompt engineering
+- **Entry point:** `generate_reader_data.py`, `generate_extractor_data.py`, `generate_critic_data.py`
+- **Key dependencies:** Groq API (GROQ_API_KEY), S2 API (S2_API_KEY), Anthropic API (quality audits)
+- **Produces:** JSONL training files in `data/{adapter}_adapter/`
+- **Status:** In progress — scripts updated with Opus-approved prompts, awaiting S2ORC re-fetch
+
+### UI (`src/papermind/ui/`)
+- **Purpose:** Streamlit-based interface for all system functions
+- **Covers:** Chat (RAG + reasoning modes), Papers (upload/ingest), Search (vector + KG graph), Training (adapter config + live logs), Dataset, Benchmarks, System
+- **Entry point:** `app.py`
+- **Key dependencies:** ServiceRegistry, all backend modules
+- **Produces:** Web UI at localhost:8501
+- **Status:** Complete (React attempt abandoned — needs proper component library)
+
+### API (`src/papermind/api/`)
+- **Purpose:** FastAPI REST backend
+- **Covers:** Health checks, paper CRUD, search, chat endpoints
+- **Entry point:** `app.py`
+- **Key dependencies:** ServiceRegistry
+- **Produces:** REST API at localhost:8000
+- **Status:** Complete
+
+## Architectural Decisions Log
+
+| Date | Decision | Rationale | Alternatives Rejected |
+|------|----------|-----------|----------------------|
+| 2026-03-27 | ChromaDB over FAISS as default vector store | FAISS caused startup hangs, ChromaDB has built-in persistence + metadata filtering | FAISS (faster but no persistence, caused bugs) |
+| 2026-03-27 | Hybrid GROBID + MinerU parser | GROBID has no LaTeX (outputs Unicode), MinerU has LaTeX but poor metadata. Hybrid gets both. | GROBID-only (no LaTeX), MinerU-only (poor metadata), PyMuPDF (no structure) |
+| 2026-03-27 | Custom GROBID Docker with Eclipse Temurin JRE 21 | Stock GROBID image has JDK cgroups v2 bug on kernel 6.17+ | Stock image (crashes), older GROBID versions (same bug) |
+| 2026-03-27 | MinerU in isolated .venv-mineru/ | MinerU needs transformers 4.x, main project uses 5.x for Qwen | Same venv (version conflict), Docker (overhead) |
+| 2026-03-28 | ServiceRegistry with RLock (not Lock) | Lock caused deadlock when embedding_pipeline accessed embedding_service internally | threading.Lock (deadlocked), no lock (race conditions) |
+| 2026-03-28 | Reranker unloads before LLM loads | Both can't fit on 12GB simultaneously (2.3 + 5.2 = 7.5GB + overhead) | Keep both loaded (OOM), CPU reranker (too slow) |
+| 2026-03-28 | 768d embeddings, no Matryoshka truncation | Truncation to 256d drops recall to 54% — unacceptable for RAG | 256d (fast but bad recall), 512d (still 54% recall) |
+| 2026-03-28 | Streamlit over React for UI | React attempt produced bare-bones UI that was worse than Streamlit. Streamlit works, has data, is proven. | React + shadcn/ui (needs proper frontend effort), Next.js (overkill for now) |
+| 2026-03-28 | DoRA over standard LoRA for all adapters | DoRA decomposes weight updates into magnitude + direction, consistently outperforms LoRA at low ranks (r=16) | Standard LoRA (lower quality at r=16), full fine-tuning (won't fit on 12GB) |
+| 2026-03-29 | Groq model selection per adapter task (benchmarked with Sonnet judge) | Different models excel at different tasks. gpt-oss-120b best for TLDR/verification, llama-3.3-70b best for QA, kimi-k2 best for extraction, qwen3-32b best for claim-gen | Single model for all (lower quality) |
+| 2026-03-29 | 20% sample validation before full generation | First attempt generated 15K+ without validation → catastrophic quality issues (truncated JSON, 87% dupes, hallucinations, off-domain) | Generate full then validate (too costly when issues found) |
+| 2026-03-29 | Gold + augmented hybrid for Reader and Critic | Human-annotated data (SciTLDR, QASPER, SciFact) as quality anchor + LLM-generated for volume. Pure LLM lacks human quality ceiling. | LLM-only (no quality anchor), Gold-only (too few examples) |
+| 2026-03-29 | SciFact: skip cross-validation folds | Loading all 5 folds created 5x duplicates (67% dupes in training set) | Load all folds (massive duplication) |
+| 2026-03-29 | Coder: dedup by instruction (paper), not code | Same paper abstract → multiple code files produced 87% instruction dupes. Keep 1 best file per paper. | Dedup by code only (instruction dupes remain), keep all files (87% dupes) |
+| 2026-03-29 | Groq reasoning parameters per model family | gpt-oss: include_reasoning + reasoning_effort. qwen3: reasoning_format (parsed). llama/kimi: no reasoning support. | Same params for all (400 errors on unsupported models) |
+
+## File Structure
 
 ```
-PDF → [Hybrid Parser] → Paper + Sections → [Chunker] → Chunks
-                                                ↓
-                                    [Embedder] → ChromaDB
-                                    [Entity Extractor] → SQLite KG
-                                    [Paper Store] → SQLite
-
-Query → [Hybrid Retriever (Vector + KG)] → [Cross-Encoder Reranker]
-    → [Context Assembly (dedup + compress + lost-in-middle)]
-    → [Qwen2.5-Coder-7B NF4] → Grounded Answer + Sources
+papermind/
+├── CLAUDE.md                           # Project constitution (this file)
+├── .claude/memory.md                   # Working memory (session state)
+├── config/settings.yaml                # All configuration
+├── pyproject.toml                      # Python project config (uv)
+├── docker/
+│   ├── Dockerfile.grobid               # Custom GROBID with JRE 21 fix
+│   └── Dockerfile.sandbox              # Code execution sandbox
+├── src/papermind/
+│   ├── models.py                       # Pydantic data models
+│   ├── config.py                       # Settings loader
+│   ├── services.py                     # ServiceRegistry singleton (RLock)
+│   ├── cli.py                          # Click CLI
+│   ├── infrastructure/
+│   │   ├── embedding.py                # nomic-embed-text-v1.5 wrapper
+│   │   ├── vector_store.py             # ChromaDB wrapper
+│   │   ├── faiss_store.py              # FAISS alternative
+│   │   ├── knowledge_graph.py          # SQLite + networkx KG
+│   │   ├── paper_store.py              # SQLite paper metadata
+│   │   ├── llm_client.py               # LLM routing (local/ollama)
+│   │   └── local_model.py              # Qwen NF4 loader + generation
+│   ├── ingestion/
+│   │   ├── hybrid_parser.py            # GROBID + MinerU pipeline
+│   │   ├── grobid_parser.py            # GROBID TEI XML parser
+│   │   ├── mineru_parser.py            # MinerU subprocess wrapper
+│   │   ├── pdf_parser.py               # PyMuPDF fallback
+│   │   ├── chunker.py                  # Parent-child chunking
+│   │   ├── embedder.py                 # Embed + store pipeline
+│   │   ├── entity_extractor.py         # Regex entity extraction
+│   │   └── latex_extractor.py          # LaTeX equation extraction
+│   ├── rag/
+│   │   ├── retriever.py                # Hybrid vector + KG retrieval
+│   │   ├── reranker.py                 # BGE cross-encoder reranker
+│   │   ├── context.py                  # Dedup + compress + lost-in-middle
+│   │   └── pipeline.py                 # RAG orchestrator
+│   ├── reasoning/
+│   │   └── frameworks.py               # CoT, Self-Consistency, ReAct
+│   ├── training/
+│   │   ├── config.py                   # TrainingConfig + ADAPTER_CONFIGS
+│   │   ├── data.py                     # ChatML formatter
+│   │   └── trainer.py                  # QLoRA/DoRA SFTTrainer
+│   ├── ui/
+│   │   ├── app.py                      # Streamlit main + routing
+│   │   ├── shared.py                   # Service getters
+│   │   └── pages/                      # Chat, Papers, Search, Training, etc.
+│   ├── api/
+│   │   ├── app.py                      # FastAPI factory
+│   │   └── routes/                     # health, papers, search, chat
+│   ├── data/
+│   │   ├── pwc_dataset_fast.py         # PwC GitHub API builder
+│   │   └── validate_dataset.py         # Dataset quality validator
+│   └── benchmarks/
+│       └── faiss_benchmark.py          # Vector store benchmarks
+├── scripts/
+│   ├── generate_reader_data.py         # Groq Reader augmentation
+│   ├── generate_extractor_data.py      # Groq Extractor labeling
+│   ├── generate_critic_data.py         # Groq Critic claim generation
+│   ├── evaluate_reader.py              # Base model evaluation
+│   ├── test_grobid_parsing.py          # GROBID test on 50 papers
+│   └── validate_parsing_accuracy.py    # Ground truth validation
+├── tests/                              # 170 pytest tests
+├── data/
+│   ├── generation_prompts.json         # Opus-validated generation prompts
+│   ├── BENCHMARKS.md                   # Benchmark report
+│   ├── benchmark_report.json           # Structured benchmarks
+│   ├── reader_adapter/                 # Reader gold + augmented data
+│   ├── extractor_adapter/              # Extractor training data
+│   ├── synthesis_adapter/              # Multi-XScience (22K, done)
+│   ├── critic_adapter/                 # Critic gold + augmented data
+│   ├── pwc/full/                       # Coder dataset (72K deduped)
+│   ├── chroma/                         # ChromaDB persistence
+│   ├── kg.sqlite                       # Knowledge graph
+│   └── papers.db                       # Paper metadata
+├── docs/                               # 50 test PDFs
+└── .env                                # API keys (not tracked)
 ```
-
----
-
-## Key Files & What They Do
-
-### Core
-- `src/papermind/models.py` — Pydantic models: Paper, Section, Chunk, Entity, Relationship, SearchResult, LatexEquation. `make_paper_id(pdf_path)` generates deterministic SHA-256 IDs from file content.
-- `src/papermind/config.py` — Pydantic Settings. Loads from `config/settings.yaml` + env vars (prefix `PAPERMIND_`, delimiter `__`). Cached via `@lru_cache`.
-- `src/papermind/services.py` — `ServiceRegistry` singleton with lazy-loaded properties. Uses `threading.RLock` (NOT Lock — RLock prevents deadlocks when embedding_pipeline accesses embedding_service internally). Global instance: `from papermind.services import services`.
-- `src/papermind/cli.py` — Click CLI: `papermind ingest`, `papermind search`, `papermind serve`, `papermind generate`.
-
-### Infrastructure
-- `infrastructure/embedding.py` — `EmbeddingService` wrapping sentence-transformers. Default model: `nomic-ai/nomic-embed-text-v1.5` (768d). Uses asymmetric prefixes: `"search_document: "` for docs, `"search_query: "` for queries. L2-normalized. Matryoshka support (but 768d recommended — truncation drops recall to 54%).
-- `infrastructure/vector_store.py` — ChromaDB wrapper. `add_chunks()`, `search()`, `delete_by_paper()`, `count()`, `get_stored_papers()`. Cosine similarity via HNSW. Score = 1.0 - cosine_distance.
-- `infrastructure/faiss_store.py` — Alternative FAISS store with Flat/IVF/HNSW index types. `count()` is a METHOD (not property — was changed for consistency with ChromaDB). Not used by default (config: `vector_store.backend = "chroma"`).
-- `infrastructure/knowledge_graph.py` — SQLite + networkx. `check_same_thread=False`. Entities table + relationships table. `get_subgraph(entity_id, depth)` returns networkx DiGraph. `search_entities()` uses LIKE query.
-- `infrastructure/paper_store.py` — SQLite paper metadata. `save()` upserts. `list_all()` orders by created_at DESC. Authors stored as JSON. Path: `./data/papers.db`.
-- `infrastructure/llm_client.py` — Routes to `LocalModel` (backend="local") or Ollama HTTP API (backend="ollama"). Async methods: `generate()`, `chat()`, `generate_stream()`.
-- `infrastructure/local_model.py` — Loads Qwen2.5-Coder-7B-Instruct with bitsandbytes NF4 quantization. 5.18GB VRAM. Chat template: ChatML (`<|im_start|>`). `generate_stream()` uses threading. `unload()` frees GPU. `vram_usage()` returns dict.
-
-### Ingestion
-- `ingestion/hybrid_parser.py` — **Primary parser**. Stage 1: GROBID for metadata. Stage 2: MinerU for body text with LaTeX. Stage 3: Reconcile (prefer MinerU body, GROBID abstract if longer). Stage 4: Validate metadata (trim >30 authors — reference pollution).
-- `ingestion/grobid_parser.py` — Calls GROBID `/api/processFulltextDocument`. Parses TEI XML. Good metadata but NO LaTeX (outputs Unicode math symbols).
-- `ingestion/mineru_parser.py` — Runs MinerU in **isolated virtualenv** (`.venv-mineru`) via subprocess because MinerU needs transformers 4.x but main project uses 5.x. Monkey-patches `torch.load` for `weights_only=False` compatibility. Outputs Markdown with `$...$` and `$$...$$` LaTeX. Takes ~30s per paper.
-- `ingestion/pdf_parser.py` — PyMuPDF fallback. Font-size heuristics for title/sections.
-- `ingestion/chunker.py` — Parent-child strategy. Parent = full section (capped 2048 tokens). Children = 512-token chunks with 64-token overlap. Uses tiktoken `cl100k_base`. Respects paragraph/sentence boundaries.
-- `ingestion/embedder.py` — `EmbeddingPipeline` orchestrates: extract texts → embed via EmbeddingService → store in vector_store. Calls `save()` if FAISS.
-- `ingestion/entity_extractor.py` — Regex patterns for methods ("we propose X"), datasets ("evaluated on X"), metrics ("achieves 95.2%"). Heuristic — NOT LLM-based yet.
-- `ingestion/latex_extractor.py` — Extracts `$$`, `\[\]`, `\(\)`, `\begin{equation}` patterns with ±150 char context.
-
-### RAG
-- `rag/retriever.py` — `hybrid_retrieve()`: vector search (2x n_results) + KG entity expansion + RRF fusion (k=60). `kg_search()` finds entities matching query, gets neighbors, collects paper_ids, then vector-searches within those papers with enriched query.
-- `rag/reranker.py` — `Reranker` class loads `BAAI/bge-reranker-v2-m3` (568M, FP32, 2.3GB VRAM). `score_pairs()` returns sigmoid-normalized [0,1] scores. `unload()` frees GPU. **CRITICAL: must unload before LLM loads** — both can't fit on 12GB simultaneously.
-- `rag/context.py` — `assemble_context()` pipeline: deduplicate (Jaccard word overlap >0.7) → compress (greedy token budget, default 4096) → lost-in-middle order (best at start+end). Formats with `[Source N]` headers.
-- `rag/pipeline.py` — `RAGPipeline` orchestrator. `DEFAULT_SYSTEM_PROMPT` instructs model to ONLY answer from context, cite sources, never fabricate. `query()` is async. `query_stream()` yields (type, data) tuples.
-
-### API
-- `api/app.py` — FastAPI factory with CORS (localhost:3000, :5173). Includes routers: health, papers, search, chat.
-- `api/routes/papers.py` — `POST /papers/ingest` uses SSE (Server-Sent Events) for streaming progress. Returns `text/event-stream` with JSON events: save, parse, clean, chunk, embed, entities, done/error.
-- `api/routes/chat.py` — `POST /chat/rag` runs full RAG. Unloads reranker before LLM generation.
-- `api/routes/health.py` — `GET /health/detailed` returns GPU info via nvidia-smi subprocess.
-
-### UI (Streamlit)
-- `ui/app.py` — Page routing with error display. `_sidebar_stats()` reads KG counts (lightweight SQLite, NOT embedding model — to avoid blocking on model load).
-- `ui/shared.py` — Thin wrappers around `services` registry (no `@st.cache_resource` — registry handles singletons).
-- `ui/pages/chat.py` — RAG mode + Direct mode. `_render_latex()` converts `\(...\)` → `$...$` and `\[...\]` → `$$...$$` for Streamlit rendering. Right sidebar with sliders (retrieve count, rerank top-k, token budget) and toggles (reranking, KG). **Unloads reranker before LLM generation.**
-- `ui/pages/papers.py` — `st.status()` for ingestion progress (NOT `st.progress()` which doesn't update during blocking calls). Parser selection: Hybrid/GROBID/PyMuPDF. Deterministic paper IDs. Re-ingestion cleans old data first.
-
-### Data
-- `data/pwc_dataset_fast.py` — GitHub API-based PwC dataset builder. `RateLimiter` class reads `X-RateLimit-Remaining` headers. Separate semaphores: `api_workers=5` (rate-limited) and `raw_workers=20` (unlimited — raw.githubusercontent.com). Streams pairs to disk via raw JSONL.
-
----
-
-## Critical Gotchas & Lessons Learned
-
-### VRAM Management
-- Reranker (2.3GB) + LLM (5.2GB) = 7.5GB — fits on 12GB but with margin. **Always unload reranker before LLM.**
-- Embedding model (nomic-embed) runs on **CPU** by default (config `embedding.device: "cpu"`). This is intentional — it's only 90MB and doesn't need GPU for our batch sizes.
-- MinerU uses ~6GB VRAM but only during ingestion (separate subprocess). Never conflicts with query-time models.
-
-### Threading & Concurrency
-- `ServiceRegistry` uses `threading.RLock` — NOT `threading.Lock`. Changed from Lock to RLock to fix deadlock where `embedding_pipeline` property acquires lock, then internally accesses `embedding_service` which tries to acquire the same lock.
-- Streamlit runs callbacks in different threads. SQLite connections use `check_same_thread=False`.
-- `asyncio.run()` inside Streamlit fails because Streamlit has its own event loop. The chat page uses `concurrent.futures.ThreadPoolExecutor` as fallback.
-
-### Persistence
-- Paper IDs are **deterministic** via `make_paper_id(pdf_path)` — SHA-256 of file content, first 12 hex chars. Same PDF always gets same ID regardless of filename or machine.
-- Paper metadata persists in `data/papers.db` (SQLite). Chunks persist in `data/chroma/` (ChromaDB). KG persists in `data/kg.sqlite`. All survive app restarts.
-- Old `st.session_state` approach was removed — caused data loss on restart.
-
-### PDF Parsing
-- GROBID Docker image has a JDK cgroups v2 bug on newer kernels. Fixed with custom Dockerfile using Eclipse Temurin JRE 21 + mounting cgroup filesystem.
-- MinerU runs in isolated `.venv-mineru/` because it needs transformers 4.x (main project uses 5.x for Qwen). Invoked via subprocess with `torch.load` monkey-patch for PyTorch 2.6+ `weights_only=True` compatibility.
-- GROBID extracts equations as Unicode symbols (α, √, ∑) — NOT LaTeX. MinerU extracts proper LaTeX. That's why hybrid parser exists.
-
-### Config
-- Default vector store backend is `"chroma"` (changed from `"faiss"` after FAISS caused startup hangs).
-- `faiss_store.py` has `count()` as a **method** (not property) — was `@property` originally, changed for consistency with ChromaDB's `count()` method.
-
----
-
-## Commands Reference
-
-```bash
-# Install
-uv sync && uv sync --extra dev --extra streamlit
-
-# Run Streamlit UI
-uv run streamlit run src/papermind/ui/app.py --server.port 8501
-
-# Run FastAPI backend
-uv run uvicorn papermind.api.app:app --host 0.0.0.0 --port 8000
-
-# Run tests (170 tests, ~18s)
-uv run pytest tests/ -v
-
-# Run tests without slow ones (skip model loading)
-uv run pytest tests/ -v -m "not slow"
-
-# Start GROBID
-docker start grobid  # or docker run with cgroup flags
-
-# Check GROBID health
-curl http://localhost:8070/api/isalive
-
-# Build PwC dataset
-export $(grep -v '^#' .env | xargs)
-uv run python -m papermind.data.pwc_dataset_fast --output data/pwc/full --api-workers 5
-
-# Run FAISS benchmarks
-uv run python -m papermind.benchmarks.faiss_benchmark --use-real --output data/benchmark_results.json
-```
-
----
-
-## Benchmark Results Summary
-
-**Model:** Qwen2.5-Coder-7B NF4 — loads in 9.3s, 5.18GB VRAM, 48.9 tok/s streaming.
-
-**Vector Store (4,102 chunks × 768d):**
-- Flat: 0.29ms, perfect recall — **best for <10K vectors**
-- IVF(256,32): 113K QPS, 97.8% R@10 — best for 50K+
-- ChromaDB: 0.59ms, 1,854 QPS — slower but has persistence + metadata filtering
-- Matryoshka 768→256d: drops recall to 54% — **stay with 768d**
-
-**PDF Parsing (50 papers):**
-- Hybrid: 549 display + 9,598 inline LaTeX equations (vs 0 from GROBID alone)
-- 49/50 papers with LaTeX. Avg 35.4s/paper.
-
----
-
-## Test Coverage
-
-170 tests across 15 files. All pass in ~18s without external services.
-
-| File | Tests | Covers |
-|------|-------|--------|
-| test_models.py | 30 | All data models, make_paper_id determinism |
-| test_rag_context.py | 17 | Lost-in-middle, dedup, compress, assemble |
-| test_config.py | 14 | Settings defaults, YAML, env vars |
-| test_latex_extractor.py | 12 | All equation patterns |
-| test_embedding.py | 11 | Shape, normalization, asymmetry |
-| test_paper_store.py | 11 | CRUD, upsert, JSON roundtrip |
-| test_entity_extractor.py | 11 | Method/dataset/metric extraction |
-| test_rag_retriever.py | 9 | RRF fusion, hybrid retrieve |
-| test_rag_reranker.py | 8 | Cross-encoder scoring, thresholds |
-| test_api.py | 8 | All FastAPI endpoints |
-| test_services.py | 7 | Singleton, RLock, thread safety |
-| test_knowledge_graph.py | 7 | Entity/relationship CRUD |
-| test_chunker.py | 6 | Parent-child, boundaries |
-| test_vector_store.py | 4 | ChromaDB operations |
-| test_pdf_parser.py | 2 | PDF extraction |
-
----
-
-## Data Files
-
-| Path | Purpose | Git-tracked? |
-|------|---------|-------------|
-| `config/settings.yaml` | All configuration | Yes |
-| `data/BENCHMARKS.md` | Benchmark report | Yes |
-| `data/benchmark_report.json` | Structured benchmarks | Yes |
-| `data/chroma/` | ChromaDB vector store | No |
-| `data/kg.sqlite` | Knowledge graph | No |
-| `data/papers.db` | Paper metadata registry | No |
-| `data/pwc/` | PwC dataset build output | No |
-| `docs/*.pdf` | 50 test papers | No |
-| `.env` | Tokens (GITHUB_TOKEN, HF_TOKEN) | No |
-| `.venv-mineru/` | Isolated MinerU virtualenv | No |
-
----
-
-## Conventions
-
-- Python 3.12+, src layout, type hints everywhere
-- Config: `config/settings.yaml` + `PAPERMIND_` env var overrides
-- Tests: pytest (no external services required)
-- All shared state via `papermind.services.services` registry
-- Deterministic paper IDs from content hash
-- ChromaDB as default vector store (not FAISS)
-- Hybrid parser as default PDF parser (not GROBID-only)
-- Reranker always unloaded before LLM loads
-- Streamlit UI (React attempt abandoned — needs proper component library)
