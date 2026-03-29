@@ -1,8 +1,12 @@
+<p align="center">
+  <img src="assets/papermind-preview.png" alt="PaperMind — your local AI research brain" width="900" />
+</p>
+
 # PaperMind
 
 **Local AI research system for paper understanding, knowledge graphs, and code generation — running entirely on a single GPU (12GB VRAM).**
 
-PaperMind ingests research papers (PDF), extracts structured content with LaTeX equations, builds a knowledge graph of entities and relationships, embeds everything into a vector store, and provides a RAG-grounded chat interface powered by a locally-running 7B parameter LLM.
+PaperMind ingests research papers (PDF), extracts structured content with LaTeX equations, builds a knowledge graph of entities and relationships, embeds everything into a vector store, and provides a RAG-grounded chat interface powered by a locally-running 7B parameter LLM with 5 specialized LoRA adapters.
 
 No cloud APIs. No data leaves your machine.
 
